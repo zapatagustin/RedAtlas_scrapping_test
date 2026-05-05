@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Red Atlas — Technical Challenge</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      padding: 40px 20px;
+    }
+
+    .wrapper {
+      max-width: 780px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.09);
+    }
+
+    header {
+      background: #0f1b2d;
+      padding: 36px 40px 28px;
+      color: #fff;
+    }
+
+    header .label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #6b9ed2;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    header .subtitle {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #a0b4c8;
+    }
+
+    .content { padding: 36px 40px; }
+
+    section { margin-bottom: 36px; }
+    section:last-child { margin-bottom: 0; }
+
+    h2 {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #2563eb;
+      border-bottom: 2px solid #e8f0fe;
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+    }
+
+    p {
+      font-size: 14.5px;
+      line-height: 1.7;
+      color: #2d2d2d;
+      margin-bottom: 12px;
+    }
+    p:last-child { margin-bottom: 0; }
+
+    ul, ol { padding-left: 20px; margin-top: 8px; }
+
+    li {
+      font-size: 14.5px;
+      line-height: 1.75;
+      color: #2d2d2d;
+      margin-bottom: 4px;
+    }
+
+    code {
+      font-family: 'Consolas', 'Fira Code', monospace;
+      background: #f0f4ff;
+      color: #2563eb;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    pre {
+      background: #0f1b2d;
+      color: #a8d8a8;
+      padding: 16px 20px;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 12px 0;
+      overflow-x: auto;
+    }
+
+    .callout {
+      background: #f0f7ff;
+      border-left: 4px solid #2563eb;
+      border-radius: 0 6px 6px 0;
+      padding: 14px 18px;
+      margin: 16px 0;
+    }
+    .callout p { margin: 0; font-size: 14px; color: #1a3a5c; }
+
+    .warn {
+      background: #fffbea;
+      border-left: 4px solid #f59e0b;
+    }
+    .warn p { color: #78350f; }
+
+    .stars-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 8px;
+    }
+    .stars-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14.5px;
+      line-height: 1.6;
+      color: #2d2d2d;
+    }
+    .stars-list li:last-child { border-bottom: none; }
+    .star { color: #f59e0b; margin-right: 6px; font-style: normal; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th {
+      background: #f0f4ff;
+      color: #1e3a5f;
+      text-align: left;
+      padding: 10px 14px;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #2d2d2d;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    tr:last-child td { border-bottom: none; }
+
+    footer {
+      background: #f8f9fb;
+      border-top: 1px solid #eee;
+      padding: 20px 40px;
+      font-size: 13px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    footer a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="label">Red Atlas · Technical Challenge</div>
+    <h1>Senior Software Engineer<br>Web Crawlers &amp; Data Engineering</h1>
+    <div class="subtitle">Prueba técnica — Candidatos externos</div>
+  </header>
+
+  <div class="content">
+
+    <!-- CONTEXTO -->
+    <section>
+      <h2>Contexto</h2>
+      <p>Red Atlas opera scrapers de producción sobre portales inmobiliarios en Puerto Rico, Colombia, Argentina y España. Este challenge simula exactamente eso: extraer datos reales de un portal real que resiste el scraping.</p>
+      <p>No buscamos código perfecto. Buscamos criterio técnico, decisiones fundamentadas y evidencia de haber lidiado con sistemas que no quieren ser scrapeados.</p>
+    </section>
+
+    <!-- OBJETIVO -->
+    <section>
+      <h2>Objetivo</h2>
+      <p>Construir un scraper que extraiga listados de propiedades en Puerto Rico desde <strong>Zillow</strong> (<code>zillow.com/pr/</code>), aplicando los siguientes filtros:</p>
+      <ul>
+        <li>Tipo de propiedad: <strong>Houses</strong> y <strong>Apartments</strong></li>
+        <li>Estado del listing: <strong>For Sale</strong> y <strong>For Rent</strong></li>
+        <li>Mínimo <strong>2 bedrooms</strong></li>
+      </ul>
+      <p style="margin-top:12px">Los datos deben almacenarse en <strong>SQLite</strong> con el schema definido más adelante. El scraper debe avanzar <strong>hasta donde la IP lo permita sin uso de proxies</strong> — no se penaliza llegar a un límite de bloqueo.</p>
+      <div class="callout warn" style="margin-top:16px">
+        <p><strong>Zillow requiere IP de Estados Unidos.</strong> Si estás fuera de EEUU, necesitás conectarte a un servidor US antes de ejecutar el scraper. ProtonVPN y Windscribe tienen tier gratuito con servidores en EEUU — sin tarjeta de crédito.</p>
+      </div>
+    </section>
+
+    <!-- DATOS -->
+    <section>
+      <h2>Campos requeridos por listing</h2>
+      <p>Cada registro debe tener columnas individuales para los campos principales, más una columna <code>data</code> con el JSON completo de la propiedad tal como lo devuelve la fuente.</p>
+      <table>
+        <tr><th>Campo</th><th>Descripción</th></tr>
+        <tr><td><code>zpid</code></td><td>ID interno de Zillow — clave primaria única</td></tr>
+        <tr><td><code>url</code></td><td>URL completa del listing (<code>zillow.com/homedetails/...</code>)</td></tr>
+        <tr><td><code>listing_status</code></td><td><code>FOR_SALE</code> / <code>FOR_RENT</code></td></tr>
+        <tr><td><code>property_type</code></td><td><code>HOUSE</code> / <code>APARTMENT</code></td></tr>
+        <tr><td><code>latitude</code> / <code>longitude</code></td><td>Coordenadas geográficas — obligatorio</td></tr>
+        <tr><td><code>price</code></td><td>Precio en USD</td></tr>
+        <tr><td><code>bedrooms</code> / <code>bathrooms</code></td><td>Número de habitaciones y baños</td></tr>
+        <tr><td><code>living_area_sqft</code></td><td>Área habitable en pies cuadrados</td></tr>
+        <tr><td><code>address</code></td><td>Dirección completa como string</td></tr>
+        <tr><td><code>description</code></td><td>Texto del anuncio (puede truncarse a 2000 chars)</td></tr>
+        <tr><td><code>photo_url</code></td><td>URL de la primera foto disponible</td></tr>
+        <tr><td><code>data</code></td><td>JSON completo de la propiedad tal como lo devuelve la fuente — para auditoría y campos adicionales</td></tr>
+        <tr><td><code>scraped_at</code></td><td>Timestamp ISO de cuándo se extrajo</td></tr>
+        <tr><td><code>status</code></td><td><code>pending</code> / <code>done</code> / <code>failed</code> — control de progreso para resume</td></tr>
+      </table>
+    </section>
+
+    <!-- SCHEMA -->
+    <section>
+      <h2>Schema SQLite esperado</h2>
+      <pre>CREATE TABLE listings (
+    zpid           TEXT PRIMARY KEY,
+    url            TEXT,
+    listing_status TEXT,
+    property_type  TEXT,
+    latitude       REAL,
+    longitude      REAL,
+    price          INTEGER,
+    bedrooms       INTEGER,
+    bathrooms      REAL,
+    living_area    INTEGER,
+    address        TEXT,
+    description    TEXT,
+    photo_url      TEXT,
+    data           TEXT,       -- JSON completo de la propiedad
+    scraped_at     TEXT,
+    status         TEXT DEFAULT 'pending'
+);</pre>
+    </section>
+
+    <!-- PISTAS -->
+    <section>
+      <h2>Pistas técnicas</h2>
+      <p>No es obligatorio usarlas, pero ayudan a arrancar sin perder tiempo en lo que no se evalúa:</p>
+      <ul>
+        <li>Zillow embebe todos los datos de cada página en un <code>&lt;script id="__NEXT_DATA__"&gt;</code> dentro del HTML — si usás browser, no hace falta parsear selectores. Ese JSON tiene todo: zpid, precio, coordenadas, fotos, descripción.</li>
+        <li>Para identificar los endpoints internos, el tab <strong>Network → Fetch/XHR</strong> en DevTools es el punto de partida. Navegá a <code>zillow.com/pr/</code> con los filtros aplicados y observá las llamadas que hace la página.</li>
+        <li>El sistema anti-bot de Zillow es <strong>PerimeterX</strong>. Para requests directas sin browser, el fingerprinting TLS es el obstáculo principal.</li>
+        <li>La URL de búsqueda con filtros ya aplicados tiene esta forma: <code>zillow.com/pr/?searchQueryState=...</code> — el parámetro es un JSON URLencodeado que incluye el estado del mapa, filtros de tipo de propiedad y número de bedrooms.</li>
+      </ul>
+    </section>
+
+    <!-- DIFERENCIADORES -->
+    <section>
+      <h2>Diferenciadores</h2>
+      <p><strong>El scraping por DOM con browser es un approach completamente válido</strong> y es lo que se espera como solución base. Las siguientes son formas de destacar, no requisitos:</p>
+
+      <ul class="stars-list">
+        <li>
+          <em class="star">★</em><strong>API interna sobre DOM.</strong>
+          Si se usa browser, interceptar o replicar las llamadas XHR/Fetch internas para obtener los datos como JSON directamente — en lugar de extraerlos del HTML o del <code>__NEXT_DATA__</code>. Más robusto ante cambios de UI.
+        </li>
+        <li>
+          <em class="star">★</em><strong>Extracción sin navegador.</strong>
+          Replicar las llamadas HTTP directamente con <code>requests</code>, <code>httpx</code>, <code>curl_cffi</code> u otra librería sin abrir ningún browser. Requiere manejar la protección PerimeterX a nivel de TLS/headers — difícil, pero posible.
+        </li>
+      </ul>
+    </section>
+
+    <!-- REQUISITOS TRANSVERSALES -->
+    <section>
+      <h2>Requisitos transversales — aplican a todos los tiers</h2>
+      <ul>
+        <li><strong>Resume/pause:</strong> si el proceso se interrumpe, retoma desde donde quedó sin volver a procesar listings ya guardados. Usar el campo <code>status</code> en SQLite.</li>
+        <li><strong>Reintentos con backoff:</strong> ante error HTTP o timeout, reintentar con espera exponencial. Máximo de reintentos configurable.</li>
+        <li><strong>Logging:</strong> cada página procesada, cada error, cada reintento. Nivel de detalle básico: INFO / WARN / ERROR.</li>
+        <li><strong>No duplicados:</strong> usar <code>zpid</code> como clave única. Si un listing ya existe en DB con <code>status = done</code>, no reprocesar.</li>
+        <li><strong>README</strong> con instrucciones de instalación y ejecución en una sola máquina.</li>
+      </ul>
+      <div class="callout warn" style="margin-top:16px">
+        <p><strong>Sin proxies.</strong> No se proveen proxies para este challenge. El scraper debe operar desde una sola IP y avanzar hasta donde Zillow lo permita. No se penaliza llegar a un límite de bloqueo — sí se penaliza no documentarlo. Ver sección de diferenciadores para la extensión opcional de proxy.</p>
+      </div>
+    </section>
+
+    <!-- EVALUACIÓN GLOBAL -->
+    <section>
+      <h2>Criterios de evaluación completos</h2>
+      <table>
+        <tr><th>Criterio</th><th>Peso</th></tr>
+        <tr><td>Approach técnico (tier alcanzado)</td><td><strong>35%</strong></td></tr>
+        <tr><td>Resume/pause + no duplicados</td><td><strong>20%</strong></td></tr>
+        <tr><td>Concurrencia y manejo de errores/reintentos</td><td><strong>15%</strong></td></tr>
+        <tr><td>Calidad y legibilidad del código</td><td><strong>15%</strong></td></tr>
+        <tr><td>Documentación de decisiones y obstáculos</td><td><strong>15%</strong></td></tr>
+      </table>
+    </section>
+
+    <!-- ENTREGABLES -->
+    <section>
+      <h2>Entregables</h2>
+      <ol>
+        <li><strong>Repositorio GitHub público</strong> con el código — completo o en el estado que esté</li>
+        <li><strong>README</strong> con:
+          <ul style="margin-top:6px">
+            <li>Instrucciones de instalación y ejecución</li>
+            <li>Qué approach técnico usaste y por qué lo elegiste</li>
+            <li>Qué obstáculos encontraste y cómo los resolviste (o intentaste resolverlos)</li>
+            <li>Si no pudiste completarlo: hasta dónde llegaste, qué faltó y por qué — esto se evalúa igual de positivo que el código</li>
+          </ul>
+        </li>
+        <li><strong>Archivo <code>.db</code> de SQLite</strong> con los datos extraídos — la cantidad no se evalúa, sí que los registros estén bien estructurados</li>
+      </ol>
+      <div class="callout" style="margin-top:16px">
+        <p><strong>Una entrega parcial bien documentada vale más que una completa sin explicación.</strong> Si llegaste hasta cierto punto y te bloqueaste, explicá qué intentaste, qué no funcionó y por qué creés que pasó. Eso es exactamente la información que buscamos evaluar.</p>
+      </div>
+    </section>
+
+    <!-- PREGUNTAS DE ARQUITECTURA -->
+    <section>
+      <h2>Preguntas de arquitectura</h2>
+      <p>Responder en el README o en un archivo separado. No hay respuesta única correcta — buscamos entender cómo razonás ante problemas reales de producción. Respuestas de 3 a 10 líneas por pregunta.</p>
+
+      <ol style="padding-left:20px; margin-top:12px;">
+        <li style="margin-bottom:20px; font-size:14.5px; line-height:1.7;">
+          <strong>Tu scraper con Playwright lleva 2 horas corriendo, no hay errores, pero el proceso está consumiendo 1.8 GB de RAM y cada página tarda el doble que al inicio. ¿Cómo diagnosticás qué está pasando y cómo lo resolverías? ¿Qué cambiarías en tu código o en la config de PM2?</strong>
+        </li>
+        <li style="margin-bottom:20px; font-size:14.5px; line-height:1.7;">
+          <strong>El scraper corrió sin errores durante 3 días, pero al revisar la base de datos te das cuenta que la mitad de los registros tienen <code>price = null</code> y <code>address = null</code>. No hubo ningún crash ni log de error. ¿Qué pudo haber pasado y cómo diseñarías el sistema para detectar esto antes de que ocurra?</strong>
+        </li>
+        <li style="margin-bottom:20px; font-size:14.5px; line-height:1.7;">
+          <strong>Tenés un scraper corriendo 24/7 en PM2 y necesitás deployar un fix urgente. El proceso está en el medio de una corrida, procesando la página 15 de 40. ¿Cómo hacés el deploy sin perder el progreso ni duplicar registros ya procesados?</strong>
+        </li>
+        <li style="margin-bottom:20px; font-size:14.5px; line-height:1.7;">
+          <strong>Necesitás procesar 500 URLs en paralelo en Node.js pero con un máximo de 10 concurrentes. ¿Cómo lo implementás? Si uno de los 10 workers falla y hace retry con backoff de 30 segundos, ¿qué problema podría aparecer cuando todos los workers fallan al mismo tiempo? ¿Cómo lo evitás?</strong>
+        </li>
+        <li style="margin-bottom:20px; font-size:14.5px; line-height:1.7;">
+          <strong>Dado el scraper que construiste, ¿cómo lo modificarías para procesar miles de listings en paralelo sin que Zillow te bloquee? ¿Qué partes del código cambiarían, qué limitaciones tiene tu approach actual y cómo las resolverías?</strong>
+        </li>
+        <li style="margin-bottom:20px; font-size:14.5px; line-height:1.7;">
+          <strong>¿Cómo integrarías un pool de proxies rotativos a tu scraper? Describí los cambios concretos en tu código — cómo elegirías qué proxy usar en cada request, cómo detectarías que un proxy fue bloqueado y cómo lo sacarías de rotación.</strong>
+        </li>
+      </ol>
+    </section>
+
+    <!-- NOTAS -->
+    <section>
+      <h2>Notas</h2>
+      <ul>
+        <li>Cualquier lenguaje es válido (Python, TypeScript, Go, etc.) y cualquier librería</li>
+        <li><strong>El uso de herramientas de IA (ChatGPT, Claude, Copilot, etc.) está permitido y no se penaliza</strong></li>
+        <li><strong>No se evalúa cantidad de datos.</strong> Importa que los registros estén bien estructurados, no cuántos son</li>
+        <li>El scraper corre hasta donde la IP lo permita — no se penaliza llegar a un límite de bloqueo</li>
+        <li><strong>No se penaliza no completarlo.</strong> Sí se penaliza no explicar por qué</li>
+        <li><strong>Plazo de entrega: 5 días calendario desde que se recibe este documento</strong></li>
+      </ul>
+    </section>
+
+  </div>
+
+
+</div>
+</body>
+</html>
