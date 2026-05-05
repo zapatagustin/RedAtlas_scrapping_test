@@ -69,8 +69,6 @@ Este problema ocurre porque el progreso en RAM se elimina al reiniciar. La mejor
 Aquí tienes el texto completo con las respuestas corregidas, optimizadas para no exceder las 10 líneas por pregunta y con la ortografía pulida, manteniendo tu estilo personal:
 Respuestas para el challenge
 
-    En este archivo se encuentran las respuestas incluidas en el challenge enviado el día 30/4.
-
 Pregunta 1: Tu scraper con Playwright lleva 2 horas corriendo, no hay errores, pero el proceso está consumiendo 1.8 GB de RAM y cada página tarda el doble que al inicio. ¿Cómo diagnosticás qué está pasando y cómo lo resolverías? ¿Qué cambiarías en tu código o en la config de PM2?
 
 Esto indica un memory leak en el navegador headless de Playwright. Probablemente el garbage collector no da abasto y acumula basura en el heap, saturando la RAM y forzando la paginación del sistema operativo, lo que ralentiza el proceso y el event loop de Node.js. Para diagnosticarlo, usaría pm2 monit y page.metrics() para trackear el crecimiento de memoria. Como solución, reduciría el ciclo de vida del navegador a 50-100 páginas antes de reiniciarlo y optimizaría el scraper deshabilitando imágenes o CSS innecesarios. Finalmente, configuraría max_memory_restart en PM2 como medida de contención ante picos críticos.  
