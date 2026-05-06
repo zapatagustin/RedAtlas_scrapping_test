@@ -56,21 +56,6 @@ D. Rate Limiting Activo
 
 Pregunta 1: Tu scraper con Playwright lleva 2 horas corriendo, no hay errores, pero el proceso está consumiendo 1.8 GB de RAM y cada página tarda el doble que al inicio. ¿Cómo diagnosticás qué está pasando y cómo lo resolverías? ¿Qué cambiarías en tu código o en la config de PM2?
 
-Esto indica un memory leak en el navegador headless de Playwright. Probablemente el garbage collector no da abasto y acumula basura en el heap, saturando la RAM y forzando la paginación del sistema operativo, lo que ralentiza el proceso y el event loop de Node.js. Para diagnosticarlo, usaría pm2 monit y page.metrics() para trackear el crecimiento de memoria. Como solución, reduciría el ciclo de vida del navegador a 50-100 páginas antes de reiniciarlo y optimizaría el scraper deshabilitando imágenes o CSS innecesarios. Finalmente, configuraría max_memory_restart en PM2 como medida de contención ante picos críticos.
-
-Pregunta 2: El scraper corrió sin errores durante 3 días, pero al revisar la base de datos te das cuenta que la mitad de los registros tienen price = null y address = null. No hubo ningún crash ni log de error. ¿Qué pudo haber pasado y cómo diseñarías el sistema para detectar esto antes de que ocurra?
-
-El fallo silencioso sugiere un cambio en la estructura de __NEXT_DATA__ en Zillow. Al no haber validación, el sistema extrae nulos sin alertar, ensuciando la base de datos. Para detectarlo antes, implementaría librerías como Zod para validar objetos y un Circuit Breaker que detenga el proceso y envíe alertas (ej. Slack) tras varios fallos. También sumaría un dashboard para monitorear campos null y un cron que verifique la salud de los datos. Como recurso rápido, programaría el scraper para alertar si un porcentaje determinado de elementos resultan en null, permitiendo ajustar el mapeo manualmente sin perder tiempo de ejecución.
-
-Pregunta 3: Tenés un scraper corriendo 24/7 en PM2 y necesitás deployar un fix urgente. El proceso está en el medio de una corrida, procesando la página 15 de 40. ¿Cómo hacés el deploy sin perder el progreso ni duplicar registros ya procesados?
-
-Este problema ocurre porque el progreso en RAM se elimina al reiniciar. La mejor solución es que el script use un UPSERT y deduplicación en la base de datos para no arriesgar la pérdida de datos, con una granularidad fina. Esto garantiza que ante cualquier eventualidad (corte de luz, crash, problemas en el deploy) se mantenga la integridad de los datos. Si bien esto retrasaría un poco la ejecución, el cambio sería mínimo y casi imperceptible, volviendo al sistema mucho más robusto al no confiar en el estado de la memoria.
-
-Aquí tienes el texto completo con las respuestas corregidas, optimizadas para no exceder las 10 líneas por pregunta y con la ortografía pulida, manteniendo tu estilo personal:
-Respuestas para el challenge
-
-Pregunta 1: Tu scraper con Playwright lleva 2 horas corriendo, no hay errores, pero el proceso está consumiendo 1.8 GB de RAM y cada página tarda el doble que al inicio. ¿Cómo diagnosticás qué está pasando y cómo lo resolverías? ¿Qué cambiarías en tu código o en la config de PM2?
-
 Esto indica un memory leak en el navegador headless de Playwright. Probablemente el garbage collector no da abasto y acumula basura en el heap, saturando la RAM y forzando la paginación del sistema operativo, lo que ralentiza el proceso y el event loop de Node.js. Para diagnosticarlo, usaría pm2 monit y page.metrics() para trackear el crecimiento de memoria. Como solución, reduciría el ciclo de vida del navegador a 50-100 páginas antes de reiniciarlo y optimizaría el scraper deshabilitando imágenes o CSS innecesarios. Finalmente, configuraría max_memory_restart en PM2 como medida de contención ante picos críticos.  
 
 Pregunta 2: El scraper corrió sin errores durante 3 días, pero al revisar la base de datos te das cuenta que la mitad de los registros tienen price = null y address = null. No hubo ningún crash ni log de error. ¿Qué pudo haber pasado y cómo diseñarías el sistema para detectar esto antes de que ocurra?
