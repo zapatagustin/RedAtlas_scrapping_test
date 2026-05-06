@@ -7,6 +7,7 @@ import gc
 import json
 import logging
 import os
+import random
 import re
 import sqlite3
 import time
@@ -354,14 +355,14 @@ def fetch_html(session, url: str) -> str | None:
             if resp.status_code == 200:
                 return resp.text
             elif resp.status_code in (403, 429):
-                wait = BACKOFF_BASE * (2 ** (attempt - 1))
+                wait = BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, BACKOFF_BASE)
                 log.warning(f"  Bloqueado ({resp.status_code}). Esperando {wait}s...")
                 time.sleep(wait)
             else:
                 log.warning(f"  HTTP {resp.status_code}. Reintentando...")
                 time.sleep(BACKOFF_BASE)
         except Exception as e:
-            wait = BACKOFF_BASE * (2 ** (attempt - 1))
+            wait = BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, BACKOFF_BASE)
             log.error(f"  Error: {e}. Reintentando en {wait}s...")
             time.sleep(wait)
     log.error(f"  Todos los intentos fallaron para {url[:90]}")
@@ -389,14 +390,14 @@ def fetch_api(session, page: int) -> list | None:
                 log.warning("  [API] 403 — bloqueo de política, sin reintentos. Fallback a HTML.")
                 return None
             elif resp.status_code == 429:
-                wait = BACKOFF_BASE * (2 ** (attempt - 1))
+                wait = BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, BACKOFF_BASE)
                 log.warning(f"  [API] Rate limit (429). Esperando {wait}s...")
                 time.sleep(wait)
             else:
                 log.warning(f"  [API] HTTP {resp.status_code}. Reintentando...")
                 time.sleep(BACKOFF_BASE)
         except Exception as e:
-            wait = BACKOFF_BASE * (2 ** (attempt - 1))
+            wait = BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, BACKOFF_BASE)
             log.warning(f"  [API] Error: {e}. Reintentando en {wait}s...")
             time.sleep(wait)
     return None

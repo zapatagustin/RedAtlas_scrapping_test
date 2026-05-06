@@ -133,7 +133,7 @@ SELECT * FROM listings WHERE status = 'failed';
 - [ ] Dashboard de monitoreo de campos null en tiempo real
 
 ### Resiliencia y concurrencia
-- [ ] Exponential backoff con jitter en todos los reintentos — evitar Thundering Herd si múltiples workers fallan simultáneamente: `wait = (base * 2^intento) + random(0, base)`
+- [x] Exponential backoff con jitter en todos los reintentos — evitar Thundering Herd si múltiples workers fallan simultáneamente: `wait = (base * 2^intento) + random(0, base)`
 - [ ] Arquitectura multi-worker con cola de tareas (ej. Redis) — separar discovery de páginas de extracción de listings, escalar horizontalmente
 - [ ] Límite de concurrencia configurable (máx. N workers simultáneos)
 
