@@ -159,7 +159,7 @@ SELECT * FROM listings WHERE status = 'failed';
 ### Observabilidad y calidad de datos
 - [x] Validación de schema con Pydantic al normalizar cada listing — detectar cambios en `__NEXT_DATA__` antes de que ensucien la DB
 - [ ] Alertas por Slack (o similar) cuando el Circuit Breaker se dispara
-- [ ] Cron/health check periódico que verifique porcentaje de campos null en la DB y alerte si supera umbral
+- [x] Cron/health check periódico que verifique porcentaje de campos null en la DB y alerte si supera umbral
 - [ ] Dashboard de monitoreo de campos null en tiempo real
 
 ### Resiliencia y concurrencia
@@ -187,6 +187,32 @@ SELECT * FROM listings WHERE status = 'failed';
 - Jitter en backoff visible: BAD_DECRYPT retries con 6.6s → 12.7s → 21.8s
 - Pydantic: 4 listings con lat/lng null → `failed` correctamente
 - BAD_DECRYPT en página 6: comportamiento esperado (límite por IP, no bug)
+
+### Feat: health check de DB + script cron
+
+**Archivos nuevos:**
+- `healthcheck.py` — consulta `listings.db`, reporta totales por status y null % por campo requerido. Umbrales: WARNING >5%, CRÍTICO >15%. Exit code 1 si hay problema (compatible con cron y monitoreo externo).
+- `cron_healthcheck.sh` — wrapper bash para cron. Autodetecta Python/Poetry, rota logs al superar 1000 líneas, escribe alertas en `healthcheck_alerts.log` separado si el health check falla.
+
+**Uso manual:**
+```bash
+poetry run python healthcheck.py
+```
+
+**Uso con cron (AWS u otro servidor):**
+```bash
+# Editar crontab:
+crontab -e
+# Agregar (cada hora):
+0 * * * * /path/to/project/cron_healthcheck.sh >> /var/log/scraper_health.log 2>&1
+```
+
+### Resultado de prueba — 2026-05-07 11:16
+
+- Total: 205 | Done: 201 | Failed: 4 (2.0%) | Pending: 0
+- price/address: 0 nulls [OK]
+- latitude/longitude: 4 nulls (2.0%) [OK] — bajo umbral del 5%
+- Exit code 0 — sin alertas
 
 ### Gestión de memoria (si se migra a Playwright en el futuro)
 - [ ] Reiniciar instancia de browser cada 50-100 páginas para prevenir memory leak en heap de Playwright

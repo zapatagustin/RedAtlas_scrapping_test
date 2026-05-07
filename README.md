@@ -6,15 +6,40 @@ Este proyecto consiste en un scraper de alto rendimiento diseñado para extraer 
 
 **Requisitos:** Python 3.10+ y conexión a internet (se recomienda el uso de hotspot móvil para evitar bloqueos por reputación de IP).
 
-1. **Clonar el repositorio:**
+1. [ ] **Clonar el repositorio:**
    ```bash
-   git clone [https://github.com/zapatagustin/RedAtlas_scrapping_test](https://github.com/zapatagustin/RedAtlas_scrapping_test)
+   git clone https://github.com/zapatagustin/RedAtlas_scrapping_test
    cd RedAtlas_scrapping_test
    pip install poetry
-   poetry init --no-interaction --name "zillow-scraper" --python "^3.10"
-   poetry add curl-cffi
-    poetry run python scraper.py
-   
+   poetry install
+   poetry run python scraper.py
+   ```
+
+2. **Verificar salud de la DB (opcional):**
+   ```bash
+   poetry run python healthcheck.py
+   ```
+   Reporta totales por status y % de campos null. Exit code 1 si supera umbrales (WARNING >5%, CRÍTICO >15%).
+
+3. **Automatizar health check con cron (para despliegue en servidor):**
+   ```bash
+   # Dar permisos de ejecución (solo primera vez):
+   chmod +x cron_healthcheck.sh
+
+   # Editar crontab:
+   crontab -e
+
+   # Agregar esta línea (corre cada hora):
+   0 * * * * /ruta/al/proyecto/cron_healthcheck.sh >> /var/log/scraper_health.log 2>&1
+   ```
+   - Logs en `healthcheck.log` (rotación automática a 1000 líneas)
+   - Alertas en `healthcheck_alerts.log` si el check falla
+
+4. **Inspeccionar listings fallidos:**
+   ```sql
+   SELECT * FROM listings WHERE status = 'failed';
+   ```
+
 2. Approach Técnico y Justificación
 
 Se optó por una arquitectura basada en peticiones HTTP de bajo nivel utilizando la librería curl_cffi por las siguientes razones:
