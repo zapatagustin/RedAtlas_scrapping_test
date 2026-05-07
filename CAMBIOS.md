@@ -168,10 +168,34 @@ SELECT * FROM listings WHERE status = 'failed';
 - [x] Límite de concurrencia configurable (máx. N workers simultáneos)
 
 ### Evasión de bloqueos y escalado
-- [ ] Proxy Manager con Round-Robin ponderado — trackear `fail_count`, `last_used` y estado por IP
+- [x] Proxy Manager con Round-Robin ponderado — trackear `fail_count`, `last_used` y estado por IP
 - [x] Rotación de JA3 fingerprints por sesión de `curl_cffi` — variar huella TLS entre requests
-- [ ] Detección automática de proxy bloqueado: 3 fallos consecutivos (403/429 o ausencia de `__NEXT_DATA__`) → cooldown de 1 hora + re-encolar tarea
+- [x] Detección automática de proxy bloqueado: 3 fallos consecutivos (403/429 o ausencia de `__NEXT_DATA__`) → cooldown de 1 hora + re-encolar tarea
 - [x] Rate limit inteligente por proxy — espaciar requests para no generar patrones detectables
+
+### Feat: Proxy Manager con Round-Robin ponderado y detección automática de bloqueo
+
+**Archivos:** `scraper.py` — CONFIG, nueva sección `PROXY MANAGER`, `make_session()`, `_worker()`, `run_scraper()`.
+
+**Nuevas constantes en CONFIG:**
+- `PROXY_MAX_FAILS = 3` — fallos consecutivos antes de cooldown
+- `PROXY_COOLDOWN_S = 3600` — segundos de cooldown (1 hora)
+- `PROXY_URLS` — cargado desde `.env`: `PROXY_URLS=http://user:pass@host:port,...`
+
+**`ProxyEntry` (dataclass):** `url`, `fail_count`, `last_used`, `cooldown_until`
+
+**`ProxyManager`:**
+- `get_proxy()` — filtra proxies en cooldown, ordena por `(fail_count, last_used)` → Round-Robin ponderado con preferencia por proxies menos usados y más saludables
+- `report_success(proxy)` — resetea `fail_count` a 0
+- `report_failure(proxy)` — incrementa `fail_count`; al llegar a `PROXY_MAX_FAILS` → cooldown 1h + alerta Slack
+- `status_summary()` — `"N/M proxies activos"` para logging
+
+**Integración en workers:**
+- `make_session(proxy_url)` — acepta proxy opcional, lo inyecta en `curl_cffi.Session(proxies=...)`
+- Session creada **por página** (no por worker) — cada página puede rotar proxy distinto; elimina necesidad de SESSION_RECYCLE
+- Worker reporta éxito/fallo al ProxyManager según `source`
+
+**Backward compatible:** sin `PROXY_URLS` en `.env` el scraper corre igual que antes con IP directa. Log: `[PROXY] Sin proxies configurados — usando IP directa`.
 
 ### Feat: rate limit con jitter entre páginas
 

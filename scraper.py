@@ -14,6 +14,7 @@ import sqlite3
 import threading
 import time
 import urllib.parse
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -36,6 +37,9 @@ SCHEMA_ALERTS_DIR  = "schema_alerts"
 PAGE_DELAY_MIN     = 2     # seconds — min wait between pages
 PAGE_DELAY_MAX     = 6     # seconds — max wait between pages
 MAX_WORKERS        = 2     # concurrent page workers — keep low (1-2) on a single IP
+PROXY_MAX_FAILS    = 3     # consecutive failures before proxy enters cooldown
+PROXY_COOLDOWN_S   = 3600  # seconds a blocked proxy stays in cooldown (1 hour)
+PROXY_URLS         = [u.strip() for u in os.getenv("PROXY_URLS", "").split(",") if u.strip()]
 SLACK_WEBHOOK_URL  = os.getenv("SLACK_WEBHOOK_URL", "")
 JA3_PROFILES       = [     # rotated per session recycle to vary TLS fingerprint
     "chrome110",
@@ -53,6 +57,55 @@ PROFILE_USER_AGENTS = {    # matching User-Agent for each JA3 profile — keeps 
     "safari17_0": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
     "safari18_0": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
 }
+
+# ─── PROXY MANAGER ────────────────────────────────────────────────────────────
+@dataclass
+class ProxyEntry:
+    url: str
+    fail_count: int = 0
+    last_used: float = field(default_factory=time.time)
+    cooldown_until: float = 0.0
+
+
+class ProxyManager:
+    def __init__(self, proxy_urls: list[str]):
+        self._proxies = [ProxyEntry(url=u) for u in proxy_urls]
+        self._lock = threading.Lock()
+
+    def has_proxies(self) -> bool:
+        return bool(self._proxies)
+
+    def get_proxy(self) -> ProxyEntry | None:
+        now = time.time()
+        with self._lock:
+            available = [p for p in self._proxies if p.cooldown_until < now]
+            if not available:
+                log.warning("[PROXY] Todos los proxies en cooldown — sin proxy disponible.")
+                return None
+            available.sort(key=lambda p: (p.fail_count, p.last_used))
+            proxy = available[0]
+            proxy.last_used = now
+            return proxy
+
+    def report_success(self, proxy: ProxyEntry):
+        with self._lock:
+            proxy.fail_count = 0
+
+    def report_failure(self, proxy: ProxyEntry):
+        with self._lock:
+            proxy.fail_count += 1
+            if proxy.fail_count >= PROXY_MAX_FAILS:
+                proxy.cooldown_until = time.time() + PROXY_COOLDOWN_S
+                proxy.fail_count = 0
+                log.warning(f"[PROXY] {proxy.url[:50]} — {PROXY_MAX_FAILS} fallos. Cooldown 1h.")
+                send_slack_alert(f":warning: [PROXY] Bloqueado: `{proxy.url[:50]}` — cooldown 1h.")
+
+    def status_summary(self) -> str:
+        now = time.time()
+        with self._lock:
+            active = sum(1 for p in self._proxies if p.cooldown_until < now)
+            return f"{active}/{len(self._proxies)} proxies activos"
+
 
 HEADERS = {
     "accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -228,11 +281,12 @@ def log_memory():
         log.info(f"[MEMORIA] {mb:.1f} MB")
 
 
-def make_session() -> tuple[curl_requests.Session, str]:
+def make_session(proxy_url: str = "") -> tuple[curl_requests.Session, str]:
     profile = random.choice(JA3_PROFILES)
     ua = PROFILE_USER_AGENTS[profile]
-    log.info(f"[JA3] Perfil TLS: {profile}")
-    return curl_requests.Session(impersonate=profile), ua
+    proxies = {"https": proxy_url, "http": proxy_url} if proxy_url else {}
+    log.info(f"[JA3] Perfil TLS: {profile}" + (f" | Proxy: {proxy_url[:40]}..." if proxy_url else ""))
+    return curl_requests.Session(impersonate=profile, proxies=proxies), ua
 
 
 # ─── SCHEMA VALIDATION ────────────────────────────────────────────────────────
@@ -480,13 +534,10 @@ def fetch_page_with_fallback(session, page: int, ua: str) -> tuple[list, dict, s
 
 
 # ─── SCRAPER ──────────────────────────────────────────────────────────────────
-def _worker(worker_id: int, page_queue: queue.Queue, stats: dict, stats_lock: threading.Lock):
+def _worker(worker_id: int, page_queue: queue.Queue, stats: dict, stats_lock: threading.Lock, proxy_manager: "ProxyManager"):
     w = f"[W{worker_id}]"
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
-    session, ua = make_session()
-    pages_processed = 0
-
     log.info(f"{w} Worker iniciado")
 
     while True:
@@ -495,21 +546,27 @@ def _worker(worker_id: int, page_queue: queue.Queue, stats: dict, stats_lock: th
         except queue.Empty:
             break
 
-        if pages_processed > 0 and pages_processed % SESSION_RECYCLE == 0:
-            log.info(f"{w} Reciclando sesión en página {page_num}")
-            del session
-            gc.collect()
-            session, ua = make_session()
+        proxy = proxy_manager.get_proxy() if proxy_manager.has_proxies() else None
+        proxy_url = proxy.url if proxy else ""
 
+        session, ua = make_session(proxy_url)
         log_memory()
 
         raw_listings, raw_json, source = fetch_page_with_fallback(session, page_num, ua)
 
+        del session
+        gc.collect()
+
         if source == "failed":
+            if proxy:
+                proxy_manager.report_failure(proxy)
             msg = f"{w} No se pudo obtener la página {page_num} tras {MAX_RETRIES} intentos."
             log.error(msg)
             send_slack_alert(f":x: {msg}")
             continue
+
+        if proxy:
+            proxy_manager.report_success(proxy)
 
         with stats_lock:
             if source == "api":
@@ -556,13 +613,11 @@ def _worker(worker_id: int, page_queue: queue.Queue, stats: dict, stats_lock: th
             log.info(f"{w} Menos de 10 resultados — última página.")
             break
 
-        pages_processed += 1
         delay = random.uniform(PAGE_DELAY_MIN, PAGE_DELAY_MAX)
         log.info(f"{w} [RATE] Esperando {delay:.1f}s...")
         time.sleep(delay)
 
     conn.close()
-    del session
     gc.collect()
     log.info(f"{w} Worker finalizado")
 
@@ -580,10 +635,16 @@ def run_scraper():
     stats = {"total_saved": 0, "failed_listings": 0, "pages_api": 0, "pages_html": 0}
     stats_lock = threading.Lock()
 
+    proxy_manager = ProxyManager(PROXY_URLS)
+    if proxy_manager.has_proxies():
+        log.info(f"[PROXY] {proxy_manager.status_summary()} cargados desde PROXY_URLS")
+    else:
+        log.info("[PROXY] Sin proxies configurados — usando IP directa")
+
     log.info(f"[WORKERS] Iniciando {MAX_WORKERS} worker(s) | Páginas {start_page}–{MAX_PAGES}")
 
     threads = [
-        threading.Thread(target=_worker, args=(i, page_q, stats, stats_lock), daemon=True, name=f"worker-{i}")
+        threading.Thread(target=_worker, args=(i, page_q, stats, stats_lock, proxy_manager), daemon=True, name=f"worker-{i}")
         for i in range(MAX_WORKERS)
     ]
     for t in threads:
