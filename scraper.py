@@ -42,6 +42,14 @@ JA3_PROFILES       = [     # rotated per session recycle to vary TLS fingerprint
     "safari17_0",
     "safari18_0",
 ]
+PROFILE_USER_AGENTS = {    # matching User-Agent for each JA3 profile — keeps TLS + HTTP headers consistent
+    "chrome110":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+    "chrome120":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "chrome124":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "chrome131":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "safari17_0": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    "safari18_0": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+}
 
 HEADERS = {
     "accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -217,10 +225,11 @@ def log_memory():
         log.info(f"[MEMORIA] {mb:.1f} MB")
 
 
-def make_session() -> curl_requests.Session:
+def make_session() -> tuple[curl_requests.Session, str]:
     profile = random.choice(JA3_PROFILES)
+    ua = PROFILE_USER_AGENTS[profile]
     log.info(f"[JA3] Perfil TLS: {profile}")
-    return curl_requests.Session(impersonate=profile)
+    return curl_requests.Session(impersonate=profile), ua
 
 
 # ─── SCHEMA VALIDATION ────────────────────────────────────────────────────────
@@ -391,11 +400,12 @@ def normalize_listing(raw: dict):
 
 
 # ─── FETCHING ─────────────────────────────────────────────────────────────────
-def fetch_html(session, url: str) -> str | None:
+def fetch_html(session, url: str, ua: str) -> str | None:
+    headers = {**HEADERS, "user-agent": ua}
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             log.info(f"[HTML] Fetching (attempt {attempt}): {url[:90]}...")
-            resp = session.get(url, headers=HEADERS, timeout=30)
+            resp = session.get(url, headers=headers, timeout=30)
             log.info(f"  Status: {resp.status_code} | Size: {len(resp.text)} chars")
             if resp.status_code == 200:
                 return resp.text
@@ -414,14 +424,15 @@ def fetch_html(session, url: str) -> str | None:
     return None
 
 
-def fetch_api(session, page: int) -> list | None:
+def fetch_api(session, page: int, ua: str) -> list | None:
     """Call Zillow's internal search API directly — no HTML parsing, ~60x less data than HTML."""
     url = "https://www.zillow.com/async-create-search-page-state"
+    headers = {**API_HEADERS, "user-agent": ua}
     payload = build_api_payload(page)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             log.info(f"[API] Página {page} (attempt {attempt})...")
-            resp = session.post(url, headers=API_HEADERS, json=payload, timeout=30)
+            resp = session.post(url, headers=headers, json=payload, timeout=30)
             log.info(f"  API Status: {resp.status_code} | Size: {len(resp.text)} chars")
             if resp.status_code == 200:
                 data = resp.json()
@@ -448,14 +459,14 @@ def fetch_api(session, page: int) -> list | None:
     return None
 
 
-def fetch_page_with_fallback(session, page: int) -> tuple[list, dict, str]:
+def fetch_page_with_fallback(session, page: int, ua: str) -> tuple[list, dict, str]:
     """Try internal API first, fall back to HTML + __NEXT_DATA__. Returns (listings, raw_json, source)."""
-    api_listings = fetch_api(session, page)
+    api_listings = fetch_api(session, page, ua)
     if api_listings is not None:
         return api_listings, {}, "api"
 
     url = build_search_url(page)
-    html = fetch_html(session, url)
+    html = fetch_html(session, url, ua)
     if not html:
         return [], {}, "failed"
 
@@ -471,7 +482,7 @@ def run_scraper():
     log.info(f"Base de datos inicializada en {DB_PATH}")
 
     start_page = get_resume_page(conn)
-    session = make_session()
+    session, ua = make_session()
 
     total_saved = 0
     failed_listings = 0
@@ -485,11 +496,11 @@ def run_scraper():
             log.info(f"[SESIÓN] Reciclando sesión en página {page_num}")
             del session
             gc.collect()
-            session = make_session()
+            session, ua = make_session()
 
         log_memory()
 
-        raw_listings, raw_json, source = fetch_page_with_fallback(session, page_num)
+        raw_listings, raw_json, source = fetch_page_with_fallback(session, page_num, ua)
 
         if source == "failed":
             msg = f"[SCRAPER] No se pudo obtener la página {page_num} tras {MAX_RETRIES} intentos. Deteniendo."

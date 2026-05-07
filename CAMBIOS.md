@@ -233,19 +233,25 @@ crontab -e
 
 ---
 
-### Feat: rotación de JA3 fingerprints por sesión
+### Feat: rotación de JA3 fingerprints por sesión + sincronización de User-Agent
 
-**Cambio:** `JA3_PROFILES` en CONFIG con 6 perfiles (`chrome110`, `chrome120`, `chrome124`, `chrome131`, `safari17_0`, `safari18_0`). `make_session()` elige uno al azar con `random.choice()` y loguea `[JA3] Perfil TLS: <perfil>`. La rotación ocurre en cada reciclado de sesión (cada `SESSION_RECYCLE` páginas).
+**Problema original:** `curl_cffi` tiene dos capas separadas: TLS fingerprint (controlado por `impersonate`) y HTTP headers (controlados manualmente). Con `impersonate="safari17_0"` el handshake TLS decía "soy Safari" pero `user-agent` en los headers decía "soy Chrome" — inconsistencia detectable. La API interna de Zillow rechazaba con 405.
 
-**Nota:** perfiles Safari generan HTTP 405 en la API interna de Zillow (el endpoint rechaza User-Agents no-Chrome). El fallback HTML funciona correctamente con cualquier perfil — el beneficio TLS aplica igualmente.
+**Cambios:**
+- `JA3_PROFILES` — lista de 6 perfiles en CONFIG (`chrome110`, `chrome120`, `chrome124`, `chrome131`, `safari17_0`, `safari18_0`)
+- `PROFILE_USER_AGENTS` — dict que mapea cada perfil a su User-Agent real correspondiente
+- `make_session()` elige perfil al azar, retorna `(session, ua)` tuple
+- `fetch_html(session, url, ua)` y `fetch_api(session, page, ua)` reciben el UA y lo inyectan con `{**HEADERS, "user-agent": ua}` — TLS y HTTP headers siempre consistentes
+- `fetch_page_with_fallback` y `run_scraper` actualizados para propagar el `ua`
 
-**Archivo:** `scraper.py` — CONFIG (`JA3_PROFILES`) + `make_session()`.
+**Archivo:** `scraper.py` — CONFIG, `make_session()`, `fetch_html()`, `fetch_api()`, `fetch_page_with_fallback()`, `run_scraper()`.
 
-### Resultado de prueba — 2026-05-07 11:55
+### Resultado de prueba — 2026-05-07 12:36
 
-- `[JA3] Perfil TLS: safari17_0` visible en log — rotación correcta
-- API 405 con Safari → fallback HTML → 200 OK, 41 listings procesados
-- Comportamiento idéntico al esperado
+- `[JA3] Perfil TLS: chrome131` — rotación correcta
+- UA inyectado: Chrome/131 en headers — consistente con perfil TLS
+- API 403 (bloqueo de política por IP, no por UA) → fallback HTML → 200 OK
+- 41 listings procesados, todos skip (ya en DB)
 
 ---
 
