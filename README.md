@@ -15,7 +15,13 @@ Este proyecto consiste en un scraper de alto rendimiento diseñado para extraer 
    poetry run python scraper.py
    ```
 
-2. **(Opcional) Configurar alertas Slack:**
+2. **Lanzar el dashboard web (opcional):**
+   ```bash
+   poetry run python dashboard.py
+   ```
+   Abre `http://localhost:5000` en el browser. Muestra totales por status, calidad de datos (null% por campo) y listings fallidos. Desde el dashboard podés lanzar el scraper directamente — los logs siguen apareciendo en la terminal.
+
+3. **(Opcional) Configurar alertas Slack:**
    Crear archivo `.env` en la raíz del proyecto:
    ```
    SLACK_WEBHOOK_URL=https://hooks.slack.com/services/TU/WEBHOOK/URL

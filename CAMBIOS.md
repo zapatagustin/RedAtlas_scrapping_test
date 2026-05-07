@@ -160,7 +160,7 @@ SELECT * FROM listings WHERE status = 'failed';
 - [x] Validación de schema con Pydantic al normalizar cada listing — detectar cambios en `__NEXT_DATA__` antes de que ensucien la DB
 - [x] Alertas por Slack (o similar) cuando el Circuit Breaker se dispara
 - [x] Cron/health check periódico que verifique porcentaje de campos null en la DB y alerte si supera umbral
-- [ ] Dashboard de monitoreo de campos null en tiempo real
+- [x] Dashboard de monitoreo de campos null en tiempo real
 
 ### Resiliencia y concurrencia
 - [x] Exponential backoff con jitter en todos los reintentos — evitar Thundering Herd si múltiples workers fallan simultáneamente: `wait = (base * 2^intento) + random(0, base)`
@@ -252,6 +252,34 @@ crontab -e
 - UA inyectado: Chrome/131 en headers — consistente con perfil TLS
 - API 403 (bloqueo de política por IP, no por UA) → fallback HTML → 200 OK
 - 41 listings procesados, todos skip (ya en DB)
+
+---
+
+### Feat: dashboard web con Flask
+
+**Archivo nuevo:** `dashboard.py` — servidor Flask en `http://localhost:5000`.
+
+**Features:**
+- Cards con totales: Total / Done / Failed / Pending
+- Tabla de calidad de datos: null% por campo requerido (`price`, `address`, `latitude`, `longitude`) con badges OK / WARNING (>5%) / CRÍTICO (>15%)
+- Tabla de últimos 20 listings fallidos con zpid, dirección, precio y fecha
+- Botón "Lanzar Scraper" — ejecuta `poetry run python scraper.py` como subprocess con stdout/stderr heredado del proceso Flask (logs aparecen en terminal)
+- Indicador de estado: pulsa verde mientras el scraper corre, gris cuando termina
+- Auto-refresh cada 5 segundos via JS fetch — sin recargar la página
+
+**Nueva dependencia:** `flask (>=3.0.0,<4.0.0)` en `pyproject.toml`.
+
+**Lanzar:**
+```bash
+poetry run python dashboard.py
+```
+
+### Resultado de prueba — 2026-05-07
+
+- Dashboard carga con datos reales de DB
+- Null% y badges correctos
+- Botón lanza scraper, log aparece en terminal, indicador pulsa
+- Auto-refresh actualiza stats al terminar la corrida
 
 ---
 
