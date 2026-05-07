@@ -6,7 +6,7 @@ Este proyecto consiste en un scraper de alto rendimiento diseñado para extraer 
 
 **Requisitos:** Python 3.10+ y conexión a internet (se recomienda el uso de hotspot móvil para evitar bloqueos por reputación de IP).
 
-1. [ ] **Clonar el repositorio:**
+1. **Clonar el repositorio:**
    ```bash
    git clone https://github.com/zapatagustin/RedAtlas_scrapping_test
    cd RedAtlas_scrapping_test
@@ -14,6 +14,13 @@ Este proyecto consiste en un scraper de alto rendimiento diseñado para extraer 
    poetry install
    poetry run python scraper.py
    ```
+
+2. **(Opcional) Configurar alertas Slack:**
+   Crear archivo `.env` en la raíz del proyecto:
+   ```
+   SLACK_WEBHOOK_URL=https://hooks.slack.com/services/TU/WEBHOOK/URL
+   ```
+   Sin esta variable, el scraper corre normalmente pero sin notificaciones. Las alertas se envían al completar cada corrida, al activarse el circuit breaker, y si una página falla todos los reintentos.
 
 2. **Verificar salud de la DB (opcional):**
    ```bash

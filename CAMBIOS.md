@@ -158,7 +158,7 @@ SELECT * FROM listings WHERE status = 'failed';
 
 ### Observabilidad y calidad de datos
 - [x] Validación de schema con Pydantic al normalizar cada listing — detectar cambios en `__NEXT_DATA__` antes de que ensucien la DB
-- [ ] Alertas por Slack (o similar) cuando el Circuit Breaker se dispara
+- [x] Alertas por Slack (o similar) cuando el Circuit Breaker se dispara
 - [x] Cron/health check periódico que verifique porcentaje de campos null en la DB y alerte si supera umbral
 - [ ] Dashboard de monitoreo de campos null en tiempo real
 
@@ -213,6 +213,25 @@ crontab -e
 - price/address: 0 nulls [OK]
 - latitude/longitude: 4 nulls (2.0%) [OK] — bajo umbral del 5%
 - Exit code 0 — sin alertas
+
+### Feat: alertas Slack con webhook
+
+**Cambio:** `send_slack_alert(message)` vía `urllib.request` (sin deps extra). Webhook URL cargada desde `.env` con `python-dotenv`. Tres puntos de disparo:
+1. Circuit breaker activado (>30% listings inválidos en una página) → `:rotating_light:`
+2. Página falla todos los reintentos → `:x:`
+3. Scraping completado → `:white_check_mark:` con resumen (Done / Failed / páginas API / HTML)
+
+**Archivos:** `scraper.py`, `pyproject.toml` (+python-dotenv >=1.0.0), `.gitignore` (+.env, +CAMBIOS.md).
+
+**Configuración:** crear `.env` en raíz con `SLACK_WEBHOOK_URL=<tu_webhook>`. Sin URL configurada, `send_slack_alert` es no-op silencioso.
+
+### Resultado de prueba — corrida 2026-05-07
+
+- Scraper completó 20 páginas sin errores
+- Mensaje `:white_check_mark:` llegó a Slack correctamente
+- Circuit breaker y alertas de fallo verificados en código
+
+---
 
 ### Gestión de memoria (si se migra a Playwright en el futuro)
 - [ ] Reiniciar instancia de browser cada 50-100 páginas para prevenir memory leak en heap de Playwright
