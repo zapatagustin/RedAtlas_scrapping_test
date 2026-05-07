@@ -28,6 +28,8 @@ MEM_WARN_MB        = 300
 MEM_CRIT_MB        = 500
 NULL_THRESHOLD_PCT = 0.30  # circuit breaker: halt if >30% of page listings have null required fields
 SCHEMA_ALERTS_DIR  = "schema_alerts"
+PAGE_DELAY_MIN     = 2     # seconds — min wait between pages
+PAGE_DELAY_MAX     = 6     # seconds — max wait between pages
 
 HEADERS = {
     "accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -505,7 +507,9 @@ def run_scraper():
             log.info("Menos de 10 resultados — última página.")
             break
 
-        time.sleep(3)
+        delay = random.uniform(PAGE_DELAY_MIN, PAGE_DELAY_MAX)
+        log.info(f"[RATE] Esperando {delay:.1f}s antes de próxima página...")
+        time.sleep(delay)
 
     conn.close()
     log.info(

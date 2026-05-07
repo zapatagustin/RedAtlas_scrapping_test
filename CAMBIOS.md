@@ -171,7 +171,22 @@ SELECT * FROM listings WHERE status = 'failed';
 - [ ] Proxy Manager con Round-Robin ponderado — trackear `fail_count`, `last_used` y estado por IP
 - [ ] Rotación de JA3 fingerprints por sesión de `curl_cffi` — variar huella TLS entre requests
 - [ ] Detección automática de proxy bloqueado: 3 fallos consecutivos (403/429 o ausencia de `__NEXT_DATA__`) → cooldown de 1 hora + re-encolar tarea
-- [ ] Rate limit inteligente por proxy — espaciar requests para no generar patrones detectables
+- [x] Rate limit inteligente por proxy — espaciar requests para no generar patrones detectables
+
+### Feat: rate limit con jitter entre páginas
+
+**Cambio:** `time.sleep(3)` fijo reemplazado por `random.uniform(PAGE_DELAY_MIN, PAGE_DELAY_MAX)`. Constantes `PAGE_DELAY_MIN=2` / `PAGE_DELAY_MAX=6` en CONFIG. Log `[RATE]` muestra el delay exacto de cada pausa.
+
+**Archivo:** `scraper.py` — CONFIG + loop principal.
+
+### Resultado de prueba — corrida 2026-05-07 11:01
+
+- Páginas scrapeadas: 1 a 5 (6ta falló por BAD_DECRYPT — límite de IP esperado)
+- Listings nuevos: 201
+- Rate delays observados: 2.9s, 4.5s, 5.0s, 4.0s, 3.8s — variación correcta
+- Jitter en backoff visible: BAD_DECRYPT retries con 6.6s → 12.7s → 21.8s
+- Pydantic: 4 listings con lat/lng null → `failed` correctamente
+- BAD_DECRYPT en página 6: comportamiento esperado (límite por IP, no bug)
 
 ### Gestión de memoria (si se migra a Playwright en el futuro)
 - [ ] Reiniciar instancia de browser cada 50-100 páginas para prevenir memory leak en heap de Playwright
