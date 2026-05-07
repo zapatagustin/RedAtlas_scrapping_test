@@ -380,6 +380,34 @@ No viable gratis. El problema no es el software VPN sino la IP del servidor host
 
 ---
 
+### Investigación: proxy SOCKS5 vía teléfono como alternativa al hotspot directo
+
+**Idea evaluada:** mantener la máquina conectada al ISP hogareño pero rutear el tráfico del scraper a través del teléfono (Tuenti) como proxy SOCKS5, para que Zillow siga viendo la IP de Tuenti.
+
+```
+PC (ISP AR) → proxy SOCKS5 en teléfono (Tuenti) → Zillow
+```
+
+**Implementación posible:**
+- `ssh -D 1080 usuario@ip_del_telefono` — proxy SOCKS5 vía SSH
+- Termux en Android con `sshd` corriendo
+- `curl_cffi` soporta proxies SOCKS5 nativamente
+
+**Por qué no aporta nada sobre el hotspot directo:**
+
+TCP lo impide a nivel fundamental. Cada conexión TCP es un tuple `(src_ip, src_port, dst_ip, dst_port)` — si la IP cambia, la conexión muere. Además, `curl_cffi` abre una conexión TCP nueva por cada request de todas formas; no hay sesión persistente que "heredar". En ambos casos Zillow ve la misma IP de Tuenti.
+
+| | Hotspot directo | Proxy SOCKS5 vía teléfono |
+|---|---|---|
+| IP que ve Zillow | Tuenti | Tuenti |
+| Complejidad | Ninguna | Alta (Termux + SSH) |
+| Datos consumidos en teléfono | Iguales | Iguales |
+| Teléfono necesita estar | Hotspot activo | Hotspot activo + Termux/SSH |
+
+**Conclusión:** sin diferencia práctica en el resultado. El hotspot directo es estrictamente más simple.
+
+---
+
 ### Gestión de memoria (si se migra a Playwright en el futuro)
 - [ ] Reiniciar instancia de browser cada 50-100 páginas para prevenir memory leak en heap de Playwright
 - [ ] Deshabilitar carga de imágenes y CSS en browser headless para reducir uso de RAM
