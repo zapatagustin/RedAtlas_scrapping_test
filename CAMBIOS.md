@@ -283,6 +283,60 @@ poetry run python dashboard.py
 
 ---
 
+### Investigación: alternativas al hotspot móvil para IP residencial
+
+**Objetivo:** encontrar método para correr el scraper sin depender del hotspot móvil.
+
+**Contexto:** Zillow bloquea IPs de datacenters (ASNs de AWS, Azure, VPNs comerciales). Solo IPs residenciales (carrier móvil o ISP hogareño) pasan. El challenge menciona ProtonVPN y Windscribe como opciones.
+
+**Método de prueba:**
+
+Se instaló `windscribe-cli` y se probaron los 10 servidores US disponibles en el free tier con el siguiente script:
+
+```bash
+SERVERS=("New York" "Chicago" "Los Angeles" "Atlanta" "Dallas" "Denver" "Miami" "Seattle" "San Jose" "Ashburn")
+
+for server in "${SERVERS[@]}"; do
+    windscribe-cli connect "$server"
+    sleep 4
+    # test con curl_cffi idéntico al scraper
+    poetry run python3 -c "
+from curl_cffi import requests as curl_requests
+s = curl_requests.Session(impersonate='chrome124')
+r = s.get('https://www.zillow.com/pr/', timeout=12)
+ok = r.status_code == 200 and '__NEXT_DATA__' in r.text
+print('PASA' if ok else f'BLOQUEADO ({r.status_code})')
+"
+    windscribe-cli disconnect
+    sleep 2
+done
+```
+
+**Resultados — 2026-05-07:**
+
+| Servidor | IP nickname | Resultado |
+|---|---|---|
+| New York | Inside Job | BLOQUEADO (403) |
+| Chicago | — | BLOQUEADO (403) |
+| Los Angeles | Dogg | BLOQUEADO (403) |
+| Atlanta | Peachtree | BLOQUEADO (403) |
+| Dallas | BBQ | BLOQUEADO (403) |
+| Denver | — | BLOQUEADO (403) |
+| Miami | Vice | BLOQUEADO (403) |
+| Seattle | Cobain | BLOQUEADO (403) |
+| San Jose | — | BLOQUEADO (403) |
+| Ashburn | — | BLOQUEADO (403) |
+
+**Conclusión:** 10/10 servidores bloqueados. Windscribe usa ASNs de datacenter propios — Zillow tiene el rango entero en blacklist. Elegir otra ciudad no ayuda porque todas las IPs pertenecen al mismo proveedor.
+
+**Opciones viables:**
+- **Hotspot móvil** ← solución actual, funciona (IP de carrier residencial)
+- **Conexión doméstica (ISP local)** ← funciona, misma lógica que hotspot
+- **Proxies residenciales pagos** (Bright Data, Oxylabs ~$10/mes) ← solución de producción
+- ProtonVPN / cualquier VPN comercial ← mismo problema que Windscribe, no viable
+
+---
+
 ### Gestión de memoria (si se migra a Playwright en el futuro)
 - [ ] Reiniciar instancia de browser cada 50-100 páginas para prevenir memory leak en heap de Playwright
 - [ ] Deshabilitar carga de imágenes y CSS en browser headless para reducir uso de RAM
