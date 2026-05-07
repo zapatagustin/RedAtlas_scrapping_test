@@ -34,6 +34,14 @@ SCHEMA_ALERTS_DIR  = "schema_alerts"
 PAGE_DELAY_MIN     = 2     # seconds — min wait between pages
 PAGE_DELAY_MAX     = 6     # seconds — max wait between pages
 SLACK_WEBHOOK_URL  = os.getenv("SLACK_WEBHOOK_URL", "")
+JA3_PROFILES       = [     # rotated per session recycle to vary TLS fingerprint
+    "chrome110",
+    "chrome120",
+    "chrome124",
+    "chrome131",
+    "safari17_0",
+    "safari18_0",
+]
 
 HEADERS = {
     "accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -210,7 +218,9 @@ def log_memory():
 
 
 def make_session() -> curl_requests.Session:
-    return curl_requests.Session(impersonate="chrome124")
+    profile = random.choice(JA3_PROFILES)
+    log.info(f"[JA3] Perfil TLS: {profile}")
+    return curl_requests.Session(impersonate=profile)
 
 
 # ─── SCHEMA VALIDATION ────────────────────────────────────────────────────────

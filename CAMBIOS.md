@@ -169,7 +169,7 @@ SELECT * FROM listings WHERE status = 'failed';
 
 ### Evasión de bloqueos y escalado
 - [ ] Proxy Manager con Round-Robin ponderado — trackear `fail_count`, `last_used` y estado por IP
-- [ ] Rotación de JA3 fingerprints por sesión de `curl_cffi` — variar huella TLS entre requests
+- [x] Rotación de JA3 fingerprints por sesión de `curl_cffi` — variar huella TLS entre requests
 - [ ] Detección automática de proxy bloqueado: 3 fallos consecutivos (403/429 o ausencia de `__NEXT_DATA__`) → cooldown de 1 hora + re-encolar tarea
 - [x] Rate limit inteligente por proxy — espaciar requests para no generar patrones detectables
 
@@ -230,6 +230,22 @@ crontab -e
 - Scraper completó 20 páginas sin errores
 - Mensaje `:white_check_mark:` llegó a Slack correctamente
 - Circuit breaker y alertas de fallo verificados en código
+
+---
+
+### Feat: rotación de JA3 fingerprints por sesión
+
+**Cambio:** `JA3_PROFILES` en CONFIG con 6 perfiles (`chrome110`, `chrome120`, `chrome124`, `chrome131`, `safari17_0`, `safari18_0`). `make_session()` elige uno al azar con `random.choice()` y loguea `[JA3] Perfil TLS: <perfil>`. La rotación ocurre en cada reciclado de sesión (cada `SESSION_RECYCLE` páginas).
+
+**Nota:** perfiles Safari generan HTTP 405 en la API interna de Zillow (el endpoint rechaza User-Agents no-Chrome). El fallback HTML funciona correctamente con cualquier perfil — el beneficio TLS aplica igualmente.
+
+**Archivo:** `scraper.py` — CONFIG (`JA3_PROFILES`) + `make_session()`.
+
+### Resultado de prueba — 2026-05-07 11:55
+
+- `[JA3] Perfil TLS: safari17_0` visible en log — rotación correcta
+- API 405 con Safari → fallback HTML → 200 OK, 41 listings procesados
+- Comportamiento idéntico al esperado
 
 ---
 
