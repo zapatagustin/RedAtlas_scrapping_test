@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import psutil
 from curl_cffi import requests as curl_requests
+from pydantic import BaseModel, ValidationError
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 DB_PATH            = "listings.db"
@@ -207,31 +208,37 @@ def make_session() -> curl_requests.Session:
 
 
 # ─── SCHEMA VALIDATION ────────────────────────────────────────────────────────
-REQUIRED_FIELDS = ["price", "address", "latitude", "longitude"]
+from typing import Optional
 
-
-def validate_listing(listing: dict) -> list:
-    return [f for f in REQUIRED_FIELDS if not listing.get(f)]
+class ListingModel(BaseModel):
+    zpid: str
+    url: str
+    listing_status: str
+    property_type: str
+    latitude: float
+    longitude: float
+    price: int
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[float] = None
+    living_area: Optional[int] = None
+    address: str
+    description: str = ""
+    photo_url: str = ""
+    data: str
+    scraped_at: str
+    status: str
 
 
 def check_page_schema(listings: list, raw_json: dict, page_num: int) -> bool:
-    """Returns False and saves alert JSON if >NULL_THRESHOLD_PCT listings have null required fields."""
+    """Returns False and saves alert JSON if >NULL_THRESHOLD_PCT listings failed Pydantic validation."""
     if not listings:
         return True
-    null_counts: dict = {}
-    failed = 0
-    for lst in listings:
-        missing = validate_listing(lst)
-        if missing:
-            failed += 1
-            for f in missing:
-                null_counts[f] = null_counts.get(f, 0) + 1
-
+    failed = sum(1 for lst in listings if lst.get("status") == "failed")
     ratio = failed / len(listings)
     if ratio > NULL_THRESHOLD_PCT:
         log.error(
-            f"[SCHEMA] Página {page_num}: {failed}/{len(listings)} listings con campos nulos "
-            f"({ratio:.0%}). Campos: {null_counts}. Circuit breaker activado."
+            f"[SCHEMA] Página {page_num}: {failed}/{len(listings)} listings inválidos "
+            f"({ratio:.0%}). Circuit breaker activado."
         )
         if raw_json:
             os.makedirs(SCHEMA_ALERTS_DIR, exist_ok=True)
@@ -335,7 +342,7 @@ def normalize_listing(raw: dict):
     if detail_url and not detail_url.startswith("http"):
         detail_url = "https://www.zillow.com" + detail_url
 
-    return {
+    row = {
         "zpid": zpid, "url": detail_url, "listing_status": listing_status,
         "property_type": property_type, "latitude": lat, "longitude": lng,
         "price": price, "bedrooms": bedrooms, "bathrooms": bathrooms,
@@ -343,6 +350,13 @@ def normalize_listing(raw: dict):
         "photo_url": photo_url, "data": json.dumps(raw, ensure_ascii=False),
         "scraped_at": datetime.now(timezone.utc).isoformat(), "status": "done",
     }
+    try:
+        ListingModel(**row)
+    except ValidationError as e:
+        missing = [str(err["loc"][0]) for err in e.errors()]
+        log.warning(f"  FAILED zpid={zpid} — campos inválidos: {missing}")
+        row["status"] = "failed"
+    return row
 
 
 # ─── FETCHING ─────────────────────────────────────────────────────────────────
@@ -473,11 +487,8 @@ def run_scraper():
             if is_done(conn, listing["zpid"]):
                 log.info(f"  Skip: zpid={listing['zpid']}")
                 continue
-            missing = validate_listing(listing)
-            if missing:
-                listing["status"] = "failed"
+            if listing["status"] == "failed":
                 failed_listings += 1
-                log.warning(f"  FAILED zpid={listing['zpid']} — campos nulos: {missing}")
             else:
                 new_on_page += 1
                 total_saved += 1

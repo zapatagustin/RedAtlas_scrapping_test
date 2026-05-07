@@ -122,12 +122,42 @@ SELECT * FROM listings WHERE status = 'failed';
 
 **Archivo:** `scraper.py` — función `fetch_api`, manejo de status codes 403/429.
 
+### Feat: jitter en backoff exponencial
+
+**Cambio:** `wait = BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0, BACKOFF_BASE)` en todos los reintentos.
+
+**Archivo:** `scraper.py` — todas las líneas de backoff en `fetch_html` y `fetch_api`.
+
+### Resultado de prueba — corrida completa 2026-05-06 15:50
+
+- Páginas scrapeadas: 15 a 20 (6 páginas)
+- Listings nuevos guardados: 148
+- API: siempre 403 → fallback HTML inmediato, sin overhead
+- HTML: 200 en todos los intentos, sin reintentos necesarios
+- Memoria: estable ~48-49 MB durante toda la corrida
+- Circuit breaker: 1 listing con `latitude`/`longitude` null guardado como `failed` — comportamiento correcto
+- Total acumulado en DB: ~752 listings
+
+### Feat: validación con Pydantic en normalize_listing
+
+**Cambio:** `ListingModel` (Pydantic v2) valida campos requeridos (`latitude`, `longitude`, `price`, `address`) al normalizar. `ValidationError` setea `status='failed'` con log del campo inválido. Eliminados `validate_listing()` y `REQUIRED_FIELDS` (reemplazados). `check_page_schema` simplificado a conteo de `status=='failed'`.
+
+**Archivos:** `scraper.py`, `pyproject.toml` (+pydantic >=2.0.0).
+
+### Resultado de prueba — corrida 2026-05-07 10:44
+
+- Páginas scrapeadas: 18 a 20 (3 páginas)
+- Listings nuevos: 53
+- Pydantic: sin `FAILED` — todos los listings válidos
+- Memoria: estable ~57MB
+- Total acumulado en DB: ~805 listings
+
 ---
 
 ## TODO — Mejoras de arquitectura mencionadas en el cuestionario
 
 ### Observabilidad y calidad de datos
-- [ ] Validación de schema con Pydantic al normalizar cada listing — detectar cambios en `__NEXT_DATA__` antes de que ensucien la DB
+- [x] Validación de schema con Pydantic al normalizar cada listing — detectar cambios en `__NEXT_DATA__` antes de que ensucien la DB
 - [ ] Alertas por Slack (o similar) cuando el Circuit Breaker se dispara
 - [ ] Cron/health check periódico que verifique porcentaje de campos null en la DB y alerte si supera umbral
 - [ ] Dashboard de monitoreo de campos null en tiempo real
