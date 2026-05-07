@@ -14,6 +14,9 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import psutil
 from curl_cffi import requests as curl_requests
 from pydantic import BaseModel, ValidationError
@@ -30,6 +33,7 @@ NULL_THRESHOLD_PCT = 0.30  # circuit breaker: halt if >30% of page listings have
 SCHEMA_ALERTS_DIR  = "schema_alerts"
 PAGE_DELAY_MIN     = 2     # seconds — min wait between pages
 PAGE_DELAY_MAX     = 6     # seconds — max wait between pages
+SLACK_WEBHOOK_URL  = os.getenv("SLACK_WEBHOOK_URL", "")
 
 HEADERS = {
     "accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -231,6 +235,21 @@ class ListingModel(BaseModel):
     status: str
 
 
+def send_slack_alert(message: str) -> None:
+    if not SLACK_WEBHOOK_URL:
+        return
+    try:
+        import urllib.request
+        payload = json.dumps({"text": message}).encode()
+        req = urllib.request.Request(
+            SLACK_WEBHOOK_URL, data=payload,
+            headers={"Content-Type": "application/json"}, method="POST"
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        log.warning(f"[SLACK] No se pudo enviar alerta: {e}")
+
+
 def check_page_schema(listings: list, raw_json: dict, page_num: int) -> bool:
     """Returns False and saves alert JSON if >NULL_THRESHOLD_PCT listings failed Pydantic validation."""
     if not listings:
@@ -238,10 +257,10 @@ def check_page_schema(listings: list, raw_json: dict, page_num: int) -> bool:
     failed = sum(1 for lst in listings if lst.get("status") == "failed")
     ratio = failed / len(listings)
     if ratio > NULL_THRESHOLD_PCT:
-        log.error(
-            f"[SCHEMA] Página {page_num}: {failed}/{len(listings)} listings inválidos "
-            f"({ratio:.0%}). Circuit breaker activado."
-        )
+        msg = (f"[SCRAPER] Circuit breaker activado — página {page_num}: "
+               f"{failed}/{len(listings)} listings inválidos ({ratio:.0%}).")
+        log.error(msg)
+        send_slack_alert(f":rotating_light: {msg}")
         if raw_json:
             os.makedirs(SCHEMA_ALERTS_DIR, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -463,7 +482,9 @@ def run_scraper():
         raw_listings, raw_json, source = fetch_page_with_fallback(session, page_num)
 
         if source == "failed":
-            log.error(f"No se pudo obtener la página {page_num}. Deteniendo.")
+            msg = f"[SCRAPER] No se pudo obtener la página {page_num} tras {MAX_RETRIES} intentos. Deteniendo."
+            log.error(msg)
+            send_slack_alert(f":x: {msg}")
             break
 
         if source == "api":
@@ -519,6 +540,12 @@ def run_scraper():
     if failed_listings:
         log.warning(f"[AUDITORÍA] {failed_listings} listings con campos nulos guardados como 'failed'.")
         log.warning("Consultar con: SELECT * FROM listings WHERE status = 'failed';")
+
+    send_slack_alert(
+        f":white_check_mark: [SCRAPER] Completado — "
+        f"Done: {total_saved} | Failed: {failed_listings} | "
+        f"Páginas API: {pages_api} | HTML fallback: {pages_html}"
+    )
 
 
 if __name__ == "__main__":

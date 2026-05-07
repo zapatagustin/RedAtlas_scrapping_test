@@ -4,3 +4,5 @@
 tmp/
 ./expl
 poetry.lock
+CAMBIOS.md
+.env
