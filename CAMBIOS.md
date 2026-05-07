@@ -337,6 +337,49 @@ done
 
 ---
 
+### Investigación: ProtonVPN free + ISP hogareño + self-hosted VPN
+
+**Continuación de la investigación de alternativas al hotspot (2026-05-07).**
+
+#### ProtonVPN free tier
+
+El free plan no permite selección de ciudad — solo conecta al "mejor servidor disponible". No se pueden testear servidores individuales. Conectó a `CA-FREE#31` (Montreal, Canada) — ni siquiera US. Conclusión: el free tier de ProtonVPN no es viable para este caso.
+
+#### ISP hogareño (Ver Tv S.A.)
+
+IP: `181.16.121.50` — ASN27984 Ver Tv S.A., Pilar, Buenos Aires, Argentina.
+
+```bash
+curl -s https://ipinfo.io | python3 -m json.tool
+# → "org": "AS27984 Ver Tv S.A.", "country": "AR"
+```
+
+Test contra Zillow: **BLOQUEADO (403)**. Causa: geolocalización Argentina. Zillow detecta el país y bloquea — no es problema de reputación de ASN sino de geo-restriction.
+
+#### Por qué funciona el hotspot (Tuenti)
+
+Tuenti corre sobre la red de Personal Argentina. Personal tiene acuerdos de peering con carriers US — parte del tráfico móvil sale por nodos en Miami o Nueva York antes de llegar a Zillow. La IP resultante aparece geolocada como US o neutral. No está documentado oficialmente pero es el comportamiento observado y confirmado en pruebas.
+
+#### Self-hosted VPN
+
+No viable gratis. El problema no es el software VPN sino la IP del servidor host. Todas las opciones cloud gratuitas (Oracle Free, AWS Free, Fly.io) tienen IPs de datacenter → bloqueadas. Para que funcione se necesitaría hostear en una máquina con IP residencial US (ej. casa de un contacto en EE.UU. con WireGuard).
+
+#### Tabla resumen — alternativas al hotspot
+
+| Método | IP resultante | Costo | Resultado |
+|---|---|---|---|
+| Hotspot Tuenti | Residencial/neutral vía peering US | Gratis | ✓ PASA |
+| ISP hogareño Ver Tv | Residencial AR (AS27984) | Gratis | ✗ 403 geo-block |
+| Windscribe (10 servidores US) | Datacenter Windscribe | Gratis | ✗ 403 VPN blacklist |
+| ProtonVPN free | Datacenter ProtonVPN (Canada) | Gratis | ✗ no permite elegir US |
+| Self-hosted VPN cloud free | Datacenter | Gratis | ✗ datacenter bloqueado |
+| Self-hosted VPN en casa US | Residencial US | Gratis* | ✓ (requiere contacto en EE.UU.) |
+| Proxies residenciales US pagos | Residencial US | ~$10/mes | ✓ solución de producción |
+
+**Conclusión:** el hotspot móvil (Tuenti/Personal) sigue siendo la única opción gratuita y funcional disponible.
+
+---
+
 ### Gestión de memoria (si se migra a Playwright en el futuro)
 - [ ] Reiniciar instancia de browser cada 50-100 páginas para prevenir memory leak en heap de Playwright
 - [ ] Deshabilitar carga de imágenes y CSS en browser headless para reducir uso de RAM
