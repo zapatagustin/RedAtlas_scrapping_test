@@ -7,9 +7,11 @@ import gc
 import json
 import logging
 import os
+import queue
 import random
 import re
 import sqlite3
+import threading
 import time
 import urllib.parse
 from datetime import datetime, timezone
@@ -33,6 +35,7 @@ NULL_THRESHOLD_PCT = 0.30  # circuit breaker: halt if >30% of page listings have
 SCHEMA_ALERTS_DIR  = "schema_alerts"
 PAGE_DELAY_MIN     = 2     # seconds — min wait between pages
 PAGE_DELAY_MAX     = 6     # seconds — max wait between pages
+MAX_WORKERS        = 2     # concurrent page workers — keep low (1-2) on a single IP
 SLACK_WEBHOOK_URL  = os.getenv("SLACK_WEBHOOK_URL", "")
 JA3_PROFILES       = [     # rotated per session recycle to vary TLS fingerprint
     "chrome110",
@@ -477,23 +480,23 @@ def fetch_page_with_fallback(session, page: int, ua: str) -> tuple[list, dict, s
 
 
 # ─── SCRAPER ──────────────────────────────────────────────────────────────────
-def run_scraper():
-    conn = init_db(DB_PATH)
-    log.info(f"Base de datos inicializada en {DB_PATH}")
-
-    start_page = get_resume_page(conn)
+def _worker(worker_id: int, page_queue: queue.Queue, stats: dict, stats_lock: threading.Lock):
+    w = f"[W{worker_id}]"
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
     session, ua = make_session()
+    pages_processed = 0
 
-    total_saved = 0
-    failed_listings = 0
-    pages_api = 0
-    pages_html = 0
+    log.info(f"{w} Worker iniciado")
 
-    for page_num in range(start_page, MAX_PAGES + 1):
+    while True:
+        try:
+            page_num = page_queue.get_nowait()
+        except queue.Empty:
+            break
 
-        # Recycle session every SESSION_RECYCLE pages — prevents cookie/buffer accumulation in libcurl
-        if (page_num - start_page) > 0 and (page_num - start_page) % SESSION_RECYCLE == 0:
-            log.info(f"[SESIÓN] Reciclando sesión en página {page_num}")
+        if pages_processed > 0 and pages_processed % SESSION_RECYCLE == 0:
+            log.info(f"{w} Reciclando sesión en página {page_num}")
             del session
             gc.collect()
             session, ua = make_session()
@@ -503,69 +506,103 @@ def run_scraper():
         raw_listings, raw_json, source = fetch_page_with_fallback(session, page_num, ua)
 
         if source == "failed":
-            msg = f"[SCRAPER] No se pudo obtener la página {page_num} tras {MAX_RETRIES} intentos. Deteniendo."
+            msg = f"{w} No se pudo obtener la página {page_num} tras {MAX_RETRIES} intentos."
             log.error(msg)
             send_slack_alert(f":x: {msg}")
-            break
+            continue
 
-        if source == "api":
-            pages_api += 1
-        else:
-            pages_html += 1
+        with stats_lock:
+            if source == "api":
+                stats["pages_api"] += 1
+            else:
+                stats["pages_html"] += 1
 
-        log.info(f"Página {page_num} [{source.upper()}]: {len(raw_listings)} listings encontrados")
+        log.info(f"{w} Página {page_num} [{source.upper()}]: {len(raw_listings)} listings encontrados")
 
         if not raw_listings:
-            log.info("Sin listings — fin de resultados o bloqueado.")
-            break
+            log.info(f"{w} Sin listings en página {page_num} — fin de resultados o bloqueado.")
+            continue
 
         normalized_batch = [lst for raw in raw_listings if (lst := normalize_listing(raw))]
 
-        # Circuit breaker: stop if schema changed and most fields are null
         if not check_page_schema(normalized_batch, raw_json, page_num):
-            log.error("Circuit breaker activado. Deteniendo scraper.")
+            log.error(f"{w} Circuit breaker activado. Deteniendo worker.")
             break
 
         new_on_page = 0
+        failed_on_page = 0
         for listing in normalized_batch:
             if is_done(conn, listing["zpid"]):
-                log.info(f"  Skip: zpid={listing['zpid']}")
+                log.info(f"  {w} Skip: zpid={listing['zpid']}")
                 continue
             if listing["status"] == "failed":
-                failed_listings += 1
+                failed_on_page += 1
             else:
                 new_on_page += 1
-                total_saved += 1
-                log.info(f"  OK zpid={listing['zpid']} | {listing['address']} | {listing['listing_status']}")
+                log.info(f"  {w} OK zpid={listing['zpid']} | {listing['address']} | {listing['listing_status']}")
             upsert_listing(conn, listing)
+
+        with stats_lock:
+            stats["total_saved"] += new_on_page
+            stats["failed_listings"] += failed_on_page
 
         page_size = len(normalized_batch)
         del raw_listings, normalized_batch, raw_json
         gc.collect()
 
-        log.info(f"Página {page_num}: +{new_on_page} nuevos. Total acumulado: {total_saved}")
+        log.info(f"{w} Página {page_num}: +{new_on_page} nuevos.")
 
         if page_size < 10:
-            log.info("Menos de 10 resultados — última página.")
+            log.info(f"{w} Menos de 10 resultados — última página.")
             break
 
+        pages_processed += 1
         delay = random.uniform(PAGE_DELAY_MIN, PAGE_DELAY_MAX)
-        log.info(f"[RATE] Esperando {delay:.1f}s antes de próxima página...")
+        log.info(f"{w} [RATE] Esperando {delay:.1f}s...")
         time.sleep(delay)
 
     conn.close()
+    del session
+    gc.collect()
+    log.info(f"{w} Worker finalizado")
+
+
+def run_scraper():
+    conn = init_db(DB_PATH)
+    log.info(f"Base de datos inicializada en {DB_PATH}")
+    start_page = get_resume_page(conn)
+    conn.close()
+
+    page_q: queue.Queue = queue.Queue()
+    for p in range(start_page, MAX_PAGES + 1):
+        page_q.put(p)
+
+    stats = {"total_saved": 0, "failed_listings": 0, "pages_api": 0, "pages_html": 0}
+    stats_lock = threading.Lock()
+
+    log.info(f"[WORKERS] Iniciando {MAX_WORKERS} worker(s) | Páginas {start_page}–{MAX_PAGES}")
+
+    threads = [
+        threading.Thread(target=_worker, args=(i, page_q, stats, stats_lock), daemon=True, name=f"worker-{i}")
+        for i in range(MAX_WORKERS)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
     log.info(
-        f"Scraping completo. Done: {total_saved} | "
-        f"API: {pages_api} páginas | HTML fallback: {pages_html} páginas"
+        f"Scraping completo. Done: {stats['total_saved']} | "
+        f"API: {stats['pages_api']} páginas | HTML fallback: {stats['pages_html']} páginas"
     )
-    if failed_listings:
-        log.warning(f"[AUDITORÍA] {failed_listings} listings con campos nulos guardados como 'failed'.")
+    if stats["failed_listings"]:
+        log.warning(f"[AUDITORÍA] {stats['failed_listings']} listings con campos nulos guardados como 'failed'.")
         log.warning("Consultar con: SELECT * FROM listings WHERE status = 'failed';")
 
     send_slack_alert(
         f":white_check_mark: [SCRAPER] Completado — "
-        f"Done: {total_saved} | Failed: {failed_listings} | "
-        f"Páginas API: {pages_api} | HTML fallback: {pages_html}"
+        f"Done: {stats['total_saved']} | Failed: {stats['failed_listings']} | "
+        f"Páginas API: {stats['pages_api']} | HTML fallback: {stats['pages_html']}"
     )
 
 

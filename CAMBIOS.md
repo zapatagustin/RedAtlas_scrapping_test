@@ -164,8 +164,8 @@ SELECT * FROM listings WHERE status = 'failed';
 
 ### Resiliencia y concurrencia
 - [x] Exponential backoff con jitter en todos los reintentos — evitar Thundering Herd si múltiples workers fallan simultáneamente: `wait = (base * 2^intento) + random(0, base)`
-- [ ] Arquitectura multi-worker con cola de tareas (ej. Redis) — separar discovery de páginas de extracción de listings, escalar horizontalmente
-- [ ] Límite de concurrencia configurable (máx. N workers simultáneos)
+- [x] Arquitectura multi-worker con cola de tareas (ej. Redis) — separar discovery de páginas de extracción de listings, escalar horizontalmente
+- [x] Límite de concurrencia configurable (máx. N workers simultáneos)
 
 ### Evasión de bloqueos y escalado
 - [ ] Proxy Manager con Round-Robin ponderado — trackear `fail_count`, `last_used` y estado por IP
@@ -377,6 +377,28 @@ No viable gratis. El problema no es el software VPN sino la IP del servidor host
 | Proxies residenciales US pagos | Residencial US | ~$10/mes | ✓ solución de producción |
 
 **Conclusión:** el hotspot móvil (Tuenti/Personal) sigue siendo la única opción gratuita y funcional disponible.
+
+---
+
+### Feat: arquitectura multi-worker con queue de páginas
+
+**Cambios:**
+- `import queue, threading` agregados
+- `MAX_WORKERS = 2` en CONFIG — controla workers concurrentes (recomendado 1-2 con IP única)
+- `_worker(worker_id, page_queue, stats, stats_lock)` — función por thread. Cada worker tiene su propia conexión SQLite (`timeout=10` para serializar writes concurrentes) y su propia sesión `curl_cffi` con JA3 propio
+- `queue.Queue` alimentada con páginas `start_page–MAX_PAGES` — workers compiten por páginas, el primero disponible toma la siguiente
+- `threading.Lock` solo para stats compartidas (contadores done/failed/páginas)
+- `run_scraper()` reescrita: crea queue, spawnea threads, hace `join()`, loguea resumen y envía Slack
+- Todos los logs prefijados con `[W{id}]` para distinguir workers
+- Reciclado de sesión, circuit breaker, rate limit y Slack alerts funcionan igual por worker
+
+**Resultado de prueba — 2026-05-07 17:13 (lanzado desde dashboard):**
+- `[W0]` y `[W1]` arrancaron con JA3 distintos (`chrome124` / `chrome131`) ✓
+- Queue tenía solo página 20 → W0 la tomó, W1 terminó inmediato (comportamiento correcto) ✓
+- HTML 200 OK, 41 listings skip (ya en DB) ✓
+- Scraping completo sin errores
+
+**Nota:** con `MAX_WORKERS=2` la tasa de requests se duplica. Con IP única aumenta el riesgo de bloqueo. Para producción con proxies rotativos se puede subir a 5-10.
 
 ---
 
